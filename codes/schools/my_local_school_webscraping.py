@@ -2,6 +2,8 @@
 # This code amalgamates the summary information from the 'mylocalschool.wales' website into one large dictionary for easy access. 
 import requests
 from bs4 import BeautifulSoup
+import pandas as pd
+import numpy as np
 
 def make_school_URL_dict_from_list(schools):
     toppage = requests.get("http://mylocalschool.wales.gov.uk/Schools/SchoolSearch?lang=en")
@@ -16,6 +18,10 @@ def make_school_URL_dict_from_list(schools):
 
 
 def tofloat(string):
+    if string[-1] == '%':
+        string = string[:-1]
+    elif string == '' or string == '*':
+        string = np.nan
     try:
         output = float(string)
     except ValueError:
@@ -63,4 +69,23 @@ def make_district_school_URLdict_by_type(district,schools=False):
             if 'Secondary' in school_type:
                 schools_URLdict[school] = school_URLs[school]         
     return schools_URLdict
+
+def load_table_into_dataFrame(schoolURL,tableid):
+    school_pages = requests.get(schoolURL)
+    school_soup = BeautifulSoup(school_pages.content, 'html.parser')
+    table = school_soup.find_all('table', id=tableid)
+    if table == []:
+        return []
+    columns = [int(table[0].find_all('th')[i].getText().strip()) for i in range(1,len(table[0].find_all('th')))]
+    rows = [table[0].find_all('td')[i].getText().strip() \
+            for i in range(len(table[0].find_all('td'))) if i%(len(columns)+1)==0]
+    table_entries_list = [table[0].find_all('td')[i].getText().strip()\
+                      for i in range(len(table[0].find_all('td'))) if i%(len(columns)+1)!=0]
+    table_entries = {}
+    for i,row in enumerate(rows):
+        table_entries[row]={}
+        for j,column in enumerate(columns):
+            table_entries[row][column] = tofloat(table_entries_list[i*len(columns)+j])
+    return pd.DataFrame.from_dict(table_entries,orient='index') 
+
 
